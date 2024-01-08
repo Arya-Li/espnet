@@ -194,6 +194,7 @@ class UNetGradTTSModel(BaseModule):
 
         for resnet1, resnet2, attn, upsample in self.ups:
             mask_up = masks.pop()
+            #print("denoiser_x:",x.shape)
             x = torch.cat((x, hiddens.pop()), dim=1)
             x = resnet1(x, mask_up, t)
             x = resnet2(x, mask_up, t)

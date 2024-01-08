@@ -55,6 +55,8 @@ class ESPnetTTSModel(AbsESPnetModel):
         text_lengths: torch.Tensor,
         speech: torch.Tensor,
         speech_lengths: torch.Tensor,
+        # 添加的提示
+        prompts:Optional[torch.Tensor] = None,
         n_timesteps: Optional[torch.Tensor] = 100,
         temperature: Optional[torch.Tensor] = 1.0,
         stoc: Optional[torch.Tensor] = False,
@@ -135,6 +137,7 @@ class ESPnetTTSModel(AbsESPnetModel):
             text_lengths=text_lengths,
             feats=feats,
             feats_lengths=feats_lengths,
+            prompts=prompts,
         )
 
         # Update batch for additional auxiliary inputs
@@ -228,6 +231,8 @@ class ESPnetTTSModel(AbsESPnetModel):
     def inference(
         self,
         text: torch.Tensor,
+        # 添加的提示 ????????????
+        #prompts: Optional[torch.Tensor] = None,
         speech: Optional[torch.Tensor] = None,
         spembs: Optional[torch.Tensor] = None,
         sids: Optional[torch.Tensor] = None,
@@ -305,9 +310,9 @@ class ESPnetTTSModel(AbsESPnetModel):
 
         if self.normalize is not None and output_dict.get("feat_gen") is not None:
             # NOTE: normalize.inverse is in-place operation
-            feat_gen_denorm = self.normalize.inverse(
-                output_dict["feat_gen"].clone()[None]
-            )[0][0]
-            output_dict.update(feat_gen_denorm=feat_gen_denorm)
+            # feat_gen_denorm = self.normalize.inverse(
+            #     output_dict["feat_gen"].clone()[None]
+            # )[0][0]
+            #output_dict.update(feat_gen_denorm=feat_gen_denorm)
 
         return output_dict

@@ -62,6 +62,8 @@ class LengthRegulator(torch.nn.Module):
             #   It will be happened in inference with a bad duration predictor.
             #   So we do not need to care the padded sequence case here.
             ds[ds.sum(dim=1).eq(0)] = 1
-
+        print('-------------------------In lengthRegulator--------------------------')
+        print("xs:", xs.shape, "dim0:", xs.shape[0])
+        print("ds:", ds.shape, "dim0:", ds.shape[0])
         repeat = [torch.repeat_interleave(x, d, dim=0) for x, d in zip(xs, ds)]
         return pad_list(repeat, self.pad_value)

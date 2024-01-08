@@ -294,7 +294,10 @@ class TextEncoder(BaseModule):
         self.window_size = window_size
         self.spk_emb_dim = spk_emb_dim
         self.n_spks = n_spks
-
+        
+        # 输出n_vocab? 定义传入149，为什么变成79
+        print("in text_encoder n_vocab is:", n_vocab)
+        
         self.emb = torch.nn.Embedding(n_vocab, n_channels)
         torch.nn.init.normal_(self.emb.weight, 0.0, n_channels ** -0.5)
 
@@ -307,24 +310,40 @@ class TextEncoder(BaseModule):
         self.proj_m = torch.nn.Conv1d(n_channels + (spk_emb_dim if n_spks > 1 else 0), n_feats, 1)
         self.proj_w = DurationPredictor(n_channels + (spk_emb_dim if n_spks > 1 else 0), filter_channels_dp,
                                         kernel_size, p_dropout)
+        print("n_vocab:",n_vocab)
 
     def forward(self, x, x_lengths, spk=None):
         num_embeddings = self.emb.num_embeddings
+        print("---------------------------In TextEncoder---------------------------------")
+        print("num_embeddings(in textEncoder)",num_embeddings)
         if x.max() >= num_embeddings:
             print("Error: Input tensor contains index out of range")
+            print(x.max())
         if x.min() < 0:
             print("Error: Input tensor contains negative index")
+            print(x.min())
+        
         x = self.emb(x) * math.sqrt(self.n_channels)
+        print("x transpose_before:", x, x.shape)
         x = torch.transpose(x, 1, -1)
+        print("x transpose after:", x, x.shape)
+        #print("x dimensions:",x.size())
         x_mask = torch.unsqueeze(sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
+        print("x_mask in textEncoder:", x_mask, x_mask.shape)
 
         x = self.prenet(x, x_mask)
+        print("x after prenet(x,x_mask):", x, x.shape)
+        
         if self.n_spks > 1:
             x = torch.cat([x, spk.unsqueeze(-1).repeat(1, 1, x.shape[-1])], dim=1)
         x = self.encoder(x, x_mask)
+        print("x after encoder(x, x_mask)", x, x.shape)
+        
         mu = self.proj_m(x) * x_mask
+        print("mu in textEncoder:", mu, mu.shape)
 
         x_dp = torch.detach(x)
         logw = self.proj_w(x_dp, x_mask)
+        print("logw in textEncoder:", logw, logw.shape)
 
         return mu, logw, x_mask

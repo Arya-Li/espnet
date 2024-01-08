@@ -19,7 +19,7 @@ from espnet2.tasks.abs_task import AbsTask
 from espnet2.text.phoneme_tokenizer import g2p_choices
 from espnet2.train.class_choices import ClassChoices
 from espnet2.train.collate_fn import CommonCollateFn
-from espnet2.train.preprocessor import CommonPreprocessor
+from espnet2.train.preprocessor import CommonPreprocessor, MutliTokenizerCommonPreprocessor, AbsPreprocessor
 from espnet2.train.trainer import Trainer
 from espnet2.tts.abs_tts import AbsTTS
 from espnet2.tts.espnet_model import ESPnetTTSModel
@@ -103,6 +103,15 @@ tts_choices = ClassChoices(
     type_check=AbsTTS,
     default="tacotron2",
 )
+preprocessor_choices = ClassChoices(
+    "preprocessor",
+    classes=dict(
+        default=CommonPreprocessor,
+        use_prompts=MutliTokenizerCommonPreprocessor,
+    ),
+    type_check=AbsPreprocessor,
+    default="default",
+)
 
 
 class TTSTask(AbsTask):
@@ -125,6 +134,8 @@ class TTSTask(AbsTask):
         energy_extractor_choices,
         # --energy_normalize and --energy_normalize_conf
         energy_normalize_choices,
+        # --preprocessor and --preprocessor_conf  控制预训练配置，可选使用提示方式
+        preprocessor_choices,
     ]
 
     # If you need to modify train() or eval() procedures, change Trainer class here
@@ -147,6 +158,13 @@ class TTSTask(AbsTask):
             default=None,
             help="A text mapping int-id to token",
         )
+        # 添加prompts_token_list
+        group.add_argument(
+            "--prompts_token_list",
+            type=str_or_none,
+            default=None,
+            help="A text mapping int-id to token (for semantic)",
+        )
         group.add_argument(
             "--odim",
             type=int_or_none,
@@ -161,6 +179,13 @@ class TTSTask(AbsTask):
         )
 
         group = parser.add_argument_group(description="Preprocess related")
+        # 添加prompts预处理
+        group.add_argument(
+            "--use_promps_preprocessor",
+            type=str2bool,
+            default=False,
+            help="Apply preprocessing to data or not",
+        )
         group.add_argument(
             "--use_preprocessor",
             type=str2bool,
@@ -174,11 +199,35 @@ class TTSTask(AbsTask):
             choices=["bpe", "char", "word", "phn"],
             help="The text will be tokenized in the specified level token",
         )
+        # 添加prompts_token_type
+        group.add_argument(
+            "--prompts_token_type",
+            type=str,
+            default="bpe",
+            choices=[
+                "bpe",
+                "char",
+                "word",
+                "phn",
+                "none",
+                "whisper_en",
+                "whisper_multilingual",
+            ],
+            help="The source text will be tokenized " "in the specified level token",
+        )
+
         group.add_argument(
             "--bpemodel",
             type=str_or_none,
             default=None,
             help="The model file of sentencepiece",
+        )
+        #添加prompts_bpemodel
+        group.add_argument(
+            "--prompts_bpemodel",
+            type=str_or_none,
+            default=None,
+            help="The model file of sentencepiece (for prompts)",
         )
         parser.add_argument(
             "--non_linguistic_symbols",
@@ -194,6 +243,14 @@ class TTSTask(AbsTask):
         )
         parser.add_argument(
             "--g2p",
+            type=str_or_none,
+            choices=g2p_choices,
+            default=None,
+            help="Specify g2p method if --token_type=phn",
+        )
+        #添加prompts_g2p
+        group.add_argument(
+            "--prompts_g2p",
             type=str_or_none,
             choices=g2p_choices,
             default=None,
@@ -224,7 +281,49 @@ class TTSTask(AbsTask):
         cls, args: argparse.Namespace, train: bool
     ) -> Optional[Callable[[str, Dict[str, np.array]], Dict[str, np.ndarray]]]:
         assert check_argument_types()
-        if args.use_preprocessor:
+        if args.prompts_token_type == "none":
+            args.prompts_token_type = None
+
+        # 判断是否使用了prompts，如果有即使用多Tokenizer的预处理
+        if args.use_promps_preprocessor and args.use_preprocessor:
+            try:
+                _ = getattr(args, "preprocessor")
+            except AttributeError:
+                setattr(args, "preprocessor", "use_prompts")
+                setattr(args, "preprocessor_conf", dict())
+            except Exception as e:
+                raise e
+
+            retval = MutliTokenizerCommonPreprocessor(
+                train=train,
+                token_type=[args.token_type, args.prompts_token_type],
+                token_list=[args.token_list, args.prompts_token_list],
+                bpemodel=[args.bpemodel, args.prompts_bpemodel],
+                non_linguistic_symbols=args.non_linguistic_symbols,
+                text_cleaner=args.cleaner,
+                g2p_type=[args.g2p, args.prompts_g2p],
+                # NOTE(kamo): Check attribute existence for backward compatibility
+                # rir_scp=getattr(args, "rir_scp", None),
+                # rir_apply_prob=getattr(args, "rir_apply_prob", 1.0),
+                # noise_scp=getattr(args, "noise_scp", None),
+                # noise_apply_prob=getattr(args, "noise_apply_prob", 1.0),
+                # noise_db_range=getattr(args, "noise_db_range", "13_15"),
+                # short_noise_thres=getattr(args, "short_noise_thres", 0.5),
+                # speech_volume_normalize=getattr(args, "speech_volume_normalize", None),
+                speech_name="speech",
+                text_name=["text", "prompts"],
+                **getattr(args, "preprocessor_conf", {}),
+            )
+        elif args.use_preprocessor:
+            # 控制不加prompts时使用默认CommonPreprocessor
+            try:
+                _ = getattr(args, "preprocessor")
+            except AttributeError:
+                setattr(args, "preprocessor", "default")
+                setattr(args, "preprocessor_conf", dict())
+            except Exception as e:
+                raise e
+
             retval = CommonPreprocessor(
                 train=train,
                 token_type=args.token_type,

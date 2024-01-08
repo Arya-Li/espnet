@@ -232,17 +232,27 @@ class Text2Speech:
     @property
     def use_sids(self) -> bool:
         """Return sid is needed or not in the inference."""
-        return self.tts.spks is not None
+        if hasattr(self.tts, 'spks'):
+            return self.tts.spks is not None
+        elif self.tts.n_spks > 1:
+            return self.tts.n_spks is not None
+        else:
+            return False
+#        return self.tts.spks is not None
 
     @property
     def use_lids(self) -> bool:
         """Return sid is needed or not in the inference."""
-        return self.tts.langs is not None
+        return False
+#        return self.tts.langs is not None
 
     @property
     def use_spembs(self) -> bool:
         """Return spemb is needed or not in the inference."""
-        return self.tts.spk_embed_dim is not None
+        if hasattr(self.tts, 'spk_embed_dim'):
+            return self.tts.spk_embed_dim is not None
+        else:
+            return False
 
     @staticmethod
     def from_pretrained(

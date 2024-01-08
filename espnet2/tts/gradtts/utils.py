@@ -41,9 +41,16 @@ def duration_loss(logw, logw_, lengths):
     loss = torch.sum((logw - logw_)**2) / torch.sum(lengths)
     return loss
 
-def intersperse(lst, item):
+def intersperse(lst, item, x_len, is_infer=False):
     # Adds blank symbol
-    result = [item] * (len(lst) * 2 + 1)
-    result[1::2] = lst
-    return result
+    if(is_infer):
+        result = [item] * (len(lst) * 2 + 1)
+        result[1::2] = lst
+        return result
+    else:
+        lst_mid = lst[:x_len]
+        result = [item] * (x_len * 2 + 1)
+        result[1::2] = lst_mid
+        x_len_long = len(result)
+        return result, x_len_long
 

@@ -378,7 +378,7 @@ class HiFiGANMultiPeriodDiscriminator(torch.nn.Module):
 
         Args:
             periods (List[int]): List of periods.
-            discriminator_params (Dict[str, Any]): Parameters for hifi-gan period
+            discriminator_params (Dict[str, Any]): Parameters for hifigan period
                 discriminator module. The period parameter will be overwritten.
 
         """
@@ -711,7 +711,7 @@ class HiFiGANMultiScaleDiscriminator(torch.nn.Module):
                 inputs.
             downsample_pooling_params (Dict[str, Any]): Parameters for the above pooling
                 module.
-            discriminator_params (Dict[str, Any]): Parameters for hifi-gan scale
+            discriminator_params (Dict[str, Any]): Parameters for hifigan scale
                 discriminator module.
             follow_official_norm (bool): Whether to follow the norm setting of the
                 official implementaion. The first discriminator uses spectral norm
@@ -808,13 +808,13 @@ class HiFiGANMultiScaleMultiPeriodDiscriminator(torch.nn.Module):
                 inputs.
             scale_downsample_pooling_params (dict): Parameters for the above pooling
                 module.
-            scale_discriminator_params (dict): Parameters for hifi-gan scale
+            scale_discriminator_params (dict): Parameters for hifigan scale
                 discriminator module.
             follow_official_norm (bool): Whether to follow the norm setting of the
                 official implementaion. The first discriminator uses spectral norm and
                 the other discriminators use weight norm.
             periods (list): List of periods.
-            period_discriminator_params (dict): Parameters for hifi-gan period
+            period_discriminator_params (dict): Parameters for hifigan period
                 discriminator module. The period parameter will be overwritten.
 
         """

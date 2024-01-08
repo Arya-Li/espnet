@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from dataclasses import is_dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+import matplotlib.pyplot as plt
+import datetime
 
 import humanfriendly
 import numpy as np
@@ -25,6 +27,7 @@ from espnet2.schedulers.abs_scheduler import (
     AbsScheduler,
     AbsValEpochStepScheduler,
 )
+from espnet2.tasks.tts import TTSTask
 from espnet2.torch_utils.add_gradient_noise import add_gradient_noise
 from espnet2.torch_utils.device_funcs import to_device
 from espnet2.torch_utils.recursive_op import recursive_average
@@ -34,6 +37,15 @@ from espnet2.train.distributed_utils import DistributedOption
 from espnet2.train.reporter import Reporter, SubReporter
 from espnet2.utils.build_dataclass import build_dataclass
 from espnet2.utils.kwargs2args import kwargs2args
+
+from espnet2.tts.utils import ParallelWaveGANPretrainedVocoder
+from espnet2.utils.types import str_or_none
+from librosa.display import specshow
+import soundfile as sf
+import yaml
+from espnet2.train.preprocessor import CommonPreprocessor
+
+
 
 if torch.distributed.is_available():
     from torch.distributed import ReduceOp
@@ -813,6 +825,62 @@ class Trainer:
                 # Apply weighted averaging for stats.
                 # if distributed, this method can also apply all_reduce()
                 stats, weight = recursive_average(stats, weight, distributed)
+
+            # 处理文本输入
+            train_config = "/home/lsh/content/espnet/egs2/ljspeech/tts1/exp/no2_tts_train_gradtts_raw_phn_tacotron_g2p_en_no_space/config.yaml"
+            config_file = Path(train_config)
+            with config_file.open("r", encoding="utf-8") as f:
+                args = yaml.safe_load(f)
+
+            #train_args 文本预处理
+            args = argparse.Namespace(**args)
+            if args.use_preprocessor:
+                preprocess_fn = CommonPreprocessor(
+                    train=False,
+                    token_type=args.token_type,
+                    token_list=args.token_list,
+                    bpemodel=args.bpemodel,
+                    non_linguistic_symbols=args.non_linguistic_symbols,
+                    text_cleaner=args.cleaner,
+                    g2p_type=args.g2p,
+                )
+            else:
+                preprocess_fn = None
+
+            text = 'hello world'
+            if isinstance(text, str):
+                text = preprocess_fn("<dummy>", dict(text=text))["text"]
+
+            #运行推理操作
+            infer_batch = dict(text=text)
+            output_dict = model.inference(**infer_batch)
+
+            #定义vocoder
+            vocoder_config = "/home/lsh/content/espnet/egs2/ljspeech/tts1/exp/parallel_wavegan/train_nodev_ljspeech_parallel_wavegan.v1/config.yml",
+            vocoder_file = "/home/lsh/content/espnet/egs2/ljspeech/tts1/exp/parallel_wavegan/train_nodev_ljspeech_parallel_wavegan.v1/checkpoint-400000steps.pkl",
+            vocoder = ParallelWaveGANPretrainedVocoder(
+                vocoder_file, vocoder_config
+            )
+            vocoder.to('cpu')
+            if isinstance(vocoder, torch.nn.Module):
+                vocoder.to(dtype=getattr(torch, 'float32')).eval()
+
+            #获取wav音频
+            input_feat = output_dict["feat_gen"]
+            wav = vocoder(input_feat)
+            output_dict.update(wav=wav)
+
+            # 保存图像
+            plt.figure(figsize=(8, 6))
+            specshow(input_feat.T)
+            # 保存图像到指定路径
+            plt.savefig('/home/lsh/content/espnet/egs2/ljspeech/tts1/exp/tts_train_gradtts_raw_phn_tacotron_g2p_en_no_space/trainging_figs/spectrogram' + fig_ids + '.png')
+
+            #保存音频
+            fig_ids = datetime.datetime.now()
+            fig_ids = str(fig_ids).replace(":", "-")
+            sf.write("/home/lsh/content/espnet/egs2/ljspeech/tts1/exp/tts_train_gradtts_raw_phn_tacotron_g2p_en_no_space/trainging_wavs/outwav" + fig_ids + ".wav",
+                wav.cpu().numpy(), 22050, "PCM_16")
 
             reporter.register(stats, weight)
             reporter.next()

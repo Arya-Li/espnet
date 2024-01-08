@@ -542,6 +542,17 @@ if ! "${skip_data_prep}"; then
               --add_symbol "${blank}:0" \
               --add_symbol "${oov}:1" \
               --add_symbol "${sos_eos}:-1"
+
+        ${python} -m espnet2.bin.tokenize_text \
+              --token_type "char" -f 2- \
+              --input "${data_feats}/prompts" --output "dump/token_list/char_tacotron_g2p_en_no_space/prompts_tokens.txt" \
+              --non_linguistic_symbols "${nlsyms_txt}" \
+              --cleaner "${cleaner}" \
+              --g2p "${g2p}" \
+              --write_vocabulary true \
+              --add_symbol "${blank}:0" \
+              --add_symbol "${oov}:1" \
+              --add_symbol "${sos_eos}:-1"
     fi
 else
     log "Skip the stages for data preparation"
@@ -773,9 +784,13 @@ if ! "${skip_train}"; then
             _fold_length="${speech_fold_length}"
             _opts+="--train_data_path_and_name_and_type ${_train_dir}/text,text,text "
             _opts+="--train_data_path_and_name_and_type ${_teacher_train_dir}/durations,durations,text_int "
+            # 添加训练集提示输入   <文件位置，读出来的名字，文件的类型>
+            _opts+="--train_data_path_and_name_and_type ${_train_dir}/prompts,prompts,text "
             _opts+="--train_shape_file ${tts_stats_dir}/train/text_shape.${token_type} "
             _opts+="--valid_data_path_and_name_and_type ${_valid_dir}/text,text,text "
             _opts+="--valid_data_path_and_name_and_type ${_teacher_valid_dir}/durations,durations,text_int "
+            # 添加验证集提示输入
+            _opts+="--train_data_path_and_name_and_type ${_valid_dir}/prompts,prompts,text "
             _opts+="--valid_shape_file ${tts_stats_dir}/valid/text_shape.${token_type} "
 
             if [ -e ${_teacher_train_dir}/probs ]; then
